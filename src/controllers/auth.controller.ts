@@ -4,7 +4,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import prisma from "../../prisma/client.ts";
-import { RegisterBody, LoginBody } from "../validators/auth.validator.ts";
+import type { RegisterBody, LoginBody } from "../validators/auth.validator.ts";
 
 const ACCESS_TOKEN_LIFETIME = 15 * 60 * 1000;
 const REFRESH_TOKEN_LIFETIME = 7 * 24 * 60 * 60 * 1000;
@@ -169,14 +169,8 @@ export const logout = async (req: Request, res: Response) => {
 };
 
 export const getMe = async (req: Request, res: Response) => {
-  const userId = Number(req.user!.sub);
-
-  if (!userId || Number.isNaN(userId)) {
-    throw createHttpError(401, "Unauthorized");
-  }
-
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: Number(req.user!.sub) },
     select: {
       id: true,
       username: true,
