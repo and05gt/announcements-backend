@@ -23,8 +23,16 @@ export const LoginSchema = registry.register(
   }),
 );
 
+export const RefreshTokenBodySchema = registry.register(
+  "RefreshTokenBody",
+  z.object({
+    refreshToken: z.string().min(1),
+  }),
+);
+
 export type RegisterBody = z.infer<typeof RegisterSchema>;
 export type LoginBody = z.infer<typeof LoginSchema>;
+export type RefreshTokenBody = z.infer<typeof RefreshTokenBodySchema>;
 
 registry.registerPath({
   method: "post",
@@ -69,6 +77,11 @@ registry.registerPath({
   path: "/auth/refresh",
   tags: ["Auth"],
   summary: "Refresh token pair",
+  request: {
+    body: {
+      content: { "application/json": { schema: RefreshTokenBodySchema } },
+    },
+  },
   responses: {
     200: { description: "Tokens refreshed successfully" },
     401: { description: "Invalid or expired refresh token" },
@@ -80,6 +93,7 @@ registry.registerPath({
   path: "/auth/logout",
   tags: ["Auth"],
   summary: "Logout user",
+  security: [{ bearerAuth: [] }],
   responses: {
     204: { description: "Logged out successfully" },
   },

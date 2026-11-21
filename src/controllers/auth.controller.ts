@@ -2,9 +2,12 @@ import type { Request, Response } from "express";
 import createHttpError from "http-errors";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import crypto from "crypto";
 import prisma from "../../prisma/client.ts";
-import type { RegisterBody, LoginBody } from "../validators/auth.validator.ts";
+import type {
+  RegisterBody,
+  LoginBody,
+  RefreshTokenBody,
+} from "../validators/auth.validator.ts";
 
 const ACCESS_TOKEN_LIFETIME = 15 * 60 * 1000;
 const REFRESH_TOKEN_LIFETIME = 7 * 24 * 60 * 60 * 1000;
@@ -16,25 +19,26 @@ const createTokens = async (userId: number) => {
     { expiresIn: ACCESS_TOKEN_LIFETIME / 1000 },
   );
 
-  const refreshToken = crypto.randomBytes(40).toString("hex");
+  const refreshToken = jwt.sign(
+    { sub: String(userId) },
+    process.env.JWT_SECRET!,
+    { expiresIn: "7d" },
+  );
 
-  await prisma.refreshToken.create({
-    data: {
-      userId,
-      token: refreshToken,
-      expiresAt: new Date(Date.now() + REFRESH_TOKEN_LIFETIME),
-    },
-  });
+  await prisma.$transaction([
+    prisma.refreshToken.deleteMany({
+      where: { userId },
+    }),
+    prisma.refreshToken.create({
+      data: {
+        userId,
+        token: refreshToken,
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_LIFETIME),
+      },
+    }),
+  ]);
+
   return { accessToken, refreshToken };
-};
-
-const setRefreshTokenCookie = (res: Response, refreshToken: string) => {
-  res.cookie("refreshToken", refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    maxAge: REFRESH_TOKEN_LIFETIME,
-  });
 };
 
 export const register = async (
@@ -65,7 +69,6 @@ export const register = async (
   });
 
   const tokens = await createTokens(user.id);
-  setRefreshTokenCookie(res, tokens.refreshToken);
 
   res.status(201).json({
     user: {
@@ -97,7 +100,6 @@ export const login = async (req: Request<{}, {}, LoginBody>, res: Response) => {
   }
 
   const tokens = await createTokens(user.id);
-  setRefreshTokenCookie(res, tokens.refreshToken);
 
   res.status(200).json({
     user: {
@@ -111,17 +113,29 @@ export const login = async (req: Request<{}, {}, LoginBody>, res: Response) => {
   });
 };
 
-export const refresh = async (req: Request, res: Response) => {
-  const refreshToken =
-    req.cookies.refreshToken ||
-    (req.body as { refreshToken?: string }).refreshToken;
+export const refresh = async (
+  req: Request<{}, {}, RefreshTokenBody>,
+  res: Response,
+) => {
+  const refreshToken = req.body?.refreshToken;
 
   if (!refreshToken) {
     throw createHttpError(401, "Refresh token not provided");
   }
 
+  let payload;
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET!);
+    payload = decoded as jwt.JwtPayload;
+  } catch {
+    throw createHttpError(401, "Invalid or expired refresh token");
+  }
+
   const storedToken = await prisma.refreshToken.findFirst({
-    where: { token: refreshToken },
+    where: {
+      token: refreshToken,
+      userId: Number(payload.sub),
+    },
   });
 
   if (!storedToken) {
@@ -140,7 +154,6 @@ export const refresh = async (req: Request, res: Response) => {
   });
 
   const tokens = await createTokens(storedToken.userId);
-  setRefreshTokenCookie(res, tokens.refreshToken);
 
   res.status(200).json({
     accessToken: tokens.accessToken,
@@ -149,20 +162,8 @@ export const refresh = async (req: Request, res: Response) => {
 };
 
 export const logout = async (req: Request, res: Response) => {
-  const refreshToken =
-    req.cookies.refreshToken ||
-    (req.body as { refreshToken?: string }).refreshToken;
-
-  if (refreshToken) {
-    await prisma.refreshToken.deleteMany({
-      where: { token: refreshToken },
-    });
-  }
-
-  res.clearCookie("refreshToken", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+  await prisma.refreshToken.deleteMany({
+    where: { userId: Number(req.user!.sub) },
   });
 
   res.status(204).end();

@@ -31,9 +31,13 @@ export const UpdateAnnouncementSchema = registry.register(
 export const GetAnnouncementsQuerySchema = registry.register(
   "GetAnnouncementsQuery",
   z.object({
-    page: z.coerce.number().int().min(1).optional(),
+    page: z.coerce.number().int().positive().optional(),
     sort: z.enum(["newest", "oldest"]).optional(),
-    search: z.string().min(1).max(100).optional(),
+    search: z
+      .string()
+      .trim()
+      .transform((value) => (value === "" ? undefined : value))
+      .optional(),
   }),
 );
 
