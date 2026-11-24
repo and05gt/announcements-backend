@@ -1,5 +1,9 @@
+import "dotenv/config";
 import express from "express";
 import type { NextFunction, Request, Response } from "express";
+import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import swaggerUi from "swagger-ui-express";
 import cookieParser from "cookie-parser";
 import authRouter from "./src/routes/auth.routes.ts";
@@ -9,12 +13,34 @@ import { generateOpenApiDocument } from "./src/openapi.ts";
 
 const app = express();
 
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  }),
+);
+
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  }),
+);
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
 app.use(express.json());
 app.use(cookieParser());
 const openApiDocument = generateOpenApiDocument();
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
-app.use("/auth", authRouter);
+app.use("/auth", limiter, authRouter);
 app.use("/announcements", announcementsRouter);
 
 // 404 Not Found handler - must be after all routes
