@@ -3,9 +3,10 @@ import express from "express";
 import type { NextFunction, Request, Response } from "express";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+import { pinoHttp } from "pino-http";
 import swaggerUi from "swagger-ui-express";
 import cookieParser from "cookie-parser";
+import logger from "./src/logger.ts";
 import authRouter from "./src/routes/auth.routes.ts";
 import announcementsRouter from "./src/routes/announcements.routes.ts";
 
@@ -21,26 +22,16 @@ app.use(
   }),
 );
 
-app.use(
-  helmet({
-    contentSecurityPolicy: false,
-  }),
-);
+app.use(helmet());
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-  message: { error: "Too many requests, please try again later" },
-});
+app.use(pinoHttp({ logger }));
 
 app.use(express.json());
 app.use(cookieParser());
 const openApiDocument = generateOpenApiDocument();
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
-app.use("/auth", limiter, authRouter);
+app.use("/auth", authRouter);
 app.use("/announcements", announcementsRouter);
 
 // 404 Not Found handler - must be after all routes
@@ -50,7 +41,7 @@ app.use((_req: Request, res: Response) => {
 
 // Error handling middleware
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  console.error(err);
+  logger.error(err);
 
   if (err.type === "entity.parse.failed") {
     return res.status(400).json({
@@ -83,7 +74,7 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(
+  logger.info(
     `Server is running on port ${PORT}: http://localhost:${PORT}/api-docs`,
   );
 });

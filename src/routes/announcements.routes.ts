@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import authenticate from "../middleware/authenticate.ts";
 import {
   validateQuery,
@@ -11,6 +11,7 @@ import {
   GetAnnouncementsQuerySchema,
   UpdateAnnouncementSchema,
 } from "../validators/announcements.validator.ts";
+import { upload } from "../middleware/upload.ts";
 import {
   getAllAnnouncements,
   getAnnouncementById,
@@ -34,6 +35,7 @@ router.get(
 router.post(
   "/",
   authenticate,
+  upload.single("image"),
   validateBody(CreateAnnouncementSchema),
   createAnnouncement,
 );
@@ -41,6 +43,7 @@ router.patch(
   "/:id",
   authenticate,
   validateParams(AnnouncementParamsSchema),
+  upload.single("image") as unknown as RequestHandler<{ id: number }>,
   validateBody(UpdateAnnouncementSchema),
   updateAnnouncement,
 );

@@ -13,8 +13,13 @@ export const CreateAnnouncementSchema = registry.register(
   z.object({
     title: z.string().min(5).max(50),
     description: z.string().min(10),
-    price: z.number().int().positive(),
+    price: z.coerce.number().int().positive(),
     category: z.enum(["sale", "service", "job", "other"]),
+    image: z
+      .custom<Express.Multer.File>()
+      .optional()
+      .nullable()
+      .openapi({ type: "string", format: "binary" }),
   }),
 );
 
@@ -82,7 +87,7 @@ registry.registerPath({
   request: {
     body: {
       content: {
-        "application/json": {
+        "multipart/form-data": {
           schema: CreateAnnouncementSchema,
         },
       },
@@ -105,7 +110,7 @@ registry.registerPath({
     params: AnnouncementParamsSchema,
     body: {
       content: {
-        "application/json": { schema: UpdateAnnouncementSchema },
+        "multipart/form-data": { schema: UpdateAnnouncementSchema },
       },
     },
   },

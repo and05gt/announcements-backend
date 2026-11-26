@@ -1,12 +1,25 @@
+import fs from "node:fs/promises";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 
 export const validateBody =
   <T extends z.ZodType>(schema: T) =>
-  (req: Request<{}, {}, z.infer<T>>, res: Response, next: NextFunction) => {
-    const result = schema.safeParse(req.body);
+  async (
+    req: Request<{}, {}, z.infer<T>>,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    const dataToValidate = req.file
+      ? { ...(req.body ?? {}), [req.file.fieldname]: req.file }
+      : (req.body ?? {});
+
+    const result = schema.safeParse(dataToValidate);
 
     if (!result.success) {
+      if (req.file?.path) {
+        await fs.unlink(req.file.path).catch(() => {});
+      }
+
       const flattened = z.flattenError(result.error);
       return res.status(422).json({
         error: "Validation failed",

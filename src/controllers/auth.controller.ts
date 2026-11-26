@@ -8,6 +8,7 @@ import type {
   LoginBody,
   RefreshTokenBody,
 } from "../validators/auth.validator.ts";
+import logger from "../logger.ts";
 
 const ACCESS_TOKEN_LIFETIME = 15 * 60 * 1000;
 const REFRESH_TOKEN_LIFETIME = 7 * 24 * 60 * 60 * 1000;
@@ -68,6 +69,14 @@ export const register = async (
     },
   });
 
+  logger.info(
+    {
+      userId: user.id,
+      username: user.username,
+    },
+    "User registered successfully",
+  );
+
   const tokens = await createTokens(user.id);
 
   res.status(201).json({
@@ -98,6 +107,14 @@ export const login = async (req: Request<{}, {}, LoginBody>, res: Response) => {
   if (!isPasswordValid) {
     throw createHttpError(401, "Invalid credentials");
   }
+
+  logger.info(
+    {
+      userId: user.id,
+      username: user.username,
+    },
+    "Login successful",
+  );
 
   const tokens = await createTokens(user.id);
 
@@ -165,6 +182,8 @@ export const logout = async (req: Request, res: Response) => {
   await prisma.refreshToken.deleteMany({
     where: { userId: Number(req.user!.sub) },
   });
+
+  logger.info({ userId: Number(req.user!.sub) }, "Logged out successfully");
 
   res.status(204).end();
 };
